@@ -2,3 +2,4 @@
 credentials.json
 .idea/*
 .idea
+src/__pycache__/*
