@@ -7,6 +7,7 @@ from tqdm import tqdm
 from rich import print
 from rich.console import Console
 import time
+from selenium.common.exceptions import StaleElementReferenceException
 
 class HaveIbeenPwned:
     def __init__(self, driver, passwords, emails):
@@ -16,6 +17,28 @@ class HaveIbeenPwned:
         self.passwords = passwords
         self.emails = emails
         self.console = Console()
+
+    def captcha_solver(self):
+        titles = [
+            "just a moment"
+        ]
+        for title in titles:
+            if self.driver.title.lower().__contains__(title):
+                while self.driver.title == title:
+                    time.sleep(1)
+                    self.console.print(f"[orange bold]Captcha detected, please solve it[/orange bold]")
+                break
+
+    def safe_send_keys(self, element, keys):
+        try:
+            # Refetch element if it's stale
+            element.send_keys(keys)
+        except StaleElementReferenceException:
+            print("Stale element detected, retrying...")
+            element = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".form-control"))
+            )
+            element.send_keys(keys)
 
     def check_passwords(self):
         pwned_passwords = []
@@ -33,27 +56,23 @@ class HaveIbeenPwned:
                 "pwned-result-bad"
             ]
             for password in tqdm(self.passwords):
-                #password = self.passwords[i]
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
-                element.send_keys(password)
-                element.send_keys(Keys.ENTER)
+                self.captcha_solver()
+                self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
+                self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
+                self.safe_send_keys(element, password)  # Enter password
+                self.safe_send_keys(element, Keys.ENTER)  # Submit
+                self.captcha_solver()
                 for card in pwn_card:
                     try:
                         pwn_element = WebDriverWait(self.driver, 2).until(
-                            EC.visibility_of_element_located(((By.ID, card)))
+                            EC.visibility_of_element_located((By.ID, card))
                         )
                         if "Oh no — pwned!" in pwn_element.get_attribute("innerHTML"):
                             pwned_passwords.append(password)
                             break
-
                     except EC.NoSuchElementException:
-                        # Element not found in the DOM, continue to the next card
                         continue
-
                     except Exception as e:
-                        # Handle any other unexpected exceptions
-                        #print(f"An error occurred with card {card}: {str(e)}")
                         continue
                 time.sleep(2)
 
@@ -84,29 +103,26 @@ class HaveIbeenPwned:
                 "email-result-bad"
             ]
             for email in tqdm(self.emails):
-                
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+                self.captcha_solver()
+                self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
+                self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
                 time.sleep(1)
-                element.send_keys(email)
+                self.captcha_solver()
+                self.safe_send_keys(element, email)  # Enter email
                 time.sleep(1)
-                element.send_keys(Keys.ENTER)
+                self.safe_send_keys(element, Keys.ENTER)  # Submit
+                self.captcha_solver()
                 for card in pwn_card:
                     try:
                         pwn_element = WebDriverWait(self.driver, 2).until(
-                            EC.visibility_of_element_located(((By.ID, card)))
+                            EC.visibility_of_element_located((By.ID, card))
                         )
                         if "Oh no — pwned!" in pwn_element.get_attribute("innerHTML"):
                             pwned_email.append(email)
                             break
-
                     except EC.NoSuchElementException:
-                        # Element not found in the DOM, continue to the next card
                         continue
-
                     except Exception as e:
-                        # Handle any other unexpected exceptions
-                        #print(f"An error occurred with card {card}: {str(e)}")
                         continue
                 time.sleep(2)
 
