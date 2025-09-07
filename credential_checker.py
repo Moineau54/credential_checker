@@ -2,19 +2,22 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from undetected_geckodriver import Firefox
-from selenium.webdriver.firefox.options import Options
+import undetected_chromedriver as uc
 
+from selenium.webdriver.firefox.options import Options
 import json
 import os
 import sys
 import argparse
 from rich.console import Console
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException
+
 
 from src.haveIbeenPwned import HaveIbeenPwned
 from src.cybernews import Cybernews
 
-
-import argparse
 
 def printing(console, pwned_passwords, pwned_numbers, pwned_emails):
     if len(pwned_emails) > 0:
@@ -31,8 +34,6 @@ def printing(console, pwned_passwords, pwned_numbers, pwned_emails):
         console.print("\n[bold red]pwned phone numbers:[/bold red]")
         for pwn_numbers in pwned_numbers:
             console.print(f"    [yellow]{pwn_numbers}[/yellow]")
-
-
 
 def arguments():
     parser = argparse.ArgumentParser(
@@ -92,17 +93,23 @@ def arguments():
         help='Check all pwned sites (default action).'
     )
 
+    # Browser type (chrome or firefox)
+    parser.add_argument(
+        '--browser',
+        choices=['chrome', 'firefox'],
+        default='chrome',
+        help='Specify the browser to use: "chrome" or "firefox". Default is chrome.'
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
     # If both --hIbP and --cybernews are not specified, default to checking all
     if not (args.hIbP or args.cybernews):
         args.all = True  # Default to checking all sites
-        args.hIbP= True
+        args.hIbP = True
         args.cybernews = True
-    elif args.hIbP and args.cybernews:
-        args.all = True
-    
+
     if args.credential_type and not args.credential:
         parser.error("--credential must be specified when using --credential_type.")
         sys.exit()
@@ -112,19 +119,40 @@ def arguments():
         parser.error("--credential_type must be specified when using --credential.")
         sys.exit()
 
-    if args.credential_type == "":
-        args.credential_type = "email password tel"
     return args
+
+def initialize_browser(args):
+    if args.without_head:
+        headless_option = "--headless"
+    else:
+        headless_option = ""
+
+    if args.browser == 'chrome':
+        driver = uc.Chrome(version_main=139, headless=headless_option)
+    elif args.browser == 'firefox':
+        firefox_options = Options()
+        if headless_option:
+            firefox_options.add_argument("--headless")
+        driver = Firefox(options=firefox_options)
+    
+    return driver
+
+def safe_element_interaction(driver, element_locator, action, *args):
+    try:
+        element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located(element_locator)
+        )
+        if action == "send_keys":
+            element.send_keys(*args)
+        elif action == "click":
+            element.click()
+    except StaleElementReferenceException:
+        print("Element reference became stale, re-fetching...")
+        safe_element_interaction(driver, element_locator, action, *args)
 
 def main():
     args = arguments()
     console = Console()
-
-    firefox_options = Options()
-
-    if args.without_head:
-        firefox_options.add_argument("--headless")
-
 
     if "credentials.json" not in os.listdir():
         default_content = {
@@ -142,28 +170,16 @@ def main():
 
         print("enter credentials, firefox profile and executable path in credentials.json")
         sys.exit()
+
     passwords = []
     emails = []
     telephone_numbers = []
+
     if not args.credential:
         args.credential_type = "email password tel"
         with open("credentials.json") as f:
             content = json.load(f)  # Use json.load to read data from the file
 
-        if not content["browser"]["profile"] == '':
-            profile_path = content["browser"]["profile"]
-            firefox_options.set_preference("profile.managed", profile_path)
-        else:
-            console.print("[bold red]please enter the path to a firefox profile in credentials.json[/bold red]")
-            sys.exit()
-        
-        if not content["browser"]["binary"] == '':
-            binary = content["browser"]["binary"]
-            firefox_options.binary_location = binary
-        else:
-            console.print("[bold red]please enter the path to the firefox executable in credentials.json[/bold red]")
-            sys.exit()
-        
         if len(content["telnumbers"]) == 0 and len(content["emails"]) == 0 and len(content["passwords"]) == 0:
             console.print("[bold red]no credentials of any kind in crendentials.json.\nplease enter a crendential in credentials.json[/bold red]")
             sys.exit()
@@ -185,7 +201,7 @@ def main():
                     passwords.append(password)
             else:
                 console.print("[orange]no passwords in credentials.json[/orange]")
-    
+
     elif args.credential_type.__contains__("email"):
         emails.append(args.credential)
     elif args.credential_type.__contains__("password"):
@@ -193,12 +209,13 @@ def main():
     elif args.credential_type.__contains__("tel"):
         telephone_numbers.append(args.credential)
 
+    # Initialize the browser based on user input
+    driver = initialize_browser(args)
 
-
-    driver = Firefox(options=firefox_options)
     pwned_passwords = []
     pwned_emails = []
     pwned_numbers = []
+
     if args.hIbP or args.all:
         haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails)
         if args.credential_type.__contains__("password"):
@@ -216,12 +233,7 @@ def main():
                         pwned_emails.append(hIbP_email)
 
         if args.credential_type.__contains__("tel"):
-            pass
-
-        
-
-
-        
+            pass  # Implement if needed
 
     if args.cybernews or args.all:
         cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
@@ -244,14 +256,11 @@ def main():
             if cybernews_telephone_numbers != None and len(cybernews_telephone_numbers):
                 for cybernews_number in cybernews_telephone_numbers:
                     if cybernews_number not in pwned_numbers:
-                        pwned_passwords.append(cybernews_number)
-
-        
+                        pwned_numbers.append(cybernews_number)
 
     printing(console, pwned_passwords=pwned_passwords, pwned_numbers=pwned_numbers, pwned_emails=pwned_emails)
 
     driver.close()
+
 if __name__ == "__main__":
     main()
-
-
