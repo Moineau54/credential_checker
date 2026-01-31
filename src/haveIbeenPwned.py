@@ -1,3 +1,5 @@
+#!../.venv/bin/python3
+
 from undetected_geckodriver import Firefox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -27,6 +29,7 @@ class HaveIbeenPwned:
                 while self.driver.title == title:
                     time.sleep(1)
                     self.console.print(f"[orange bold]Captcha detected, please solve it[/orange bold]")
+                time.sleep(1)
                 break
 
     def safe_send_keys(self, element, keys):

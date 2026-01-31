@@ -1,3 +1,5 @@
+#!../.venv/bin/python3
+
 from undetected_geckodriver import Firefox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -60,7 +62,7 @@ class Cybernews:
         for selector in popup_selectors:
             try:
                 # Try to find and click the element with a short timeout
-                element = WebDriverWait(self.driver, 2).until(
+                element = WebDriverWait(self.driver, 1).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                 )
 
