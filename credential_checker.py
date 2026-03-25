@@ -71,7 +71,7 @@ def arguments():
     parser.add_argument(
         '--file',
         type=str,
-        default='credentials.json',
+        default='config/credentials.json',
         help='Specify a custom JSON file with credentials. Default is "credentials.json".'
     )
 
@@ -157,22 +157,28 @@ def main():
     args = arguments()
     console = Console()
 
-    if "credentials.json" not in os.listdir():
-        default_content = {
-            "browser": {
-                "profile": "",
-                "binary": ""
-            },
-            "emails": [],
-            "telnumber": [],
-            "passwords": []
-        }
-        # Open the file for writing and dump the default content into it
-        with open("credentials.json", "w") as f:
-            json.dump(default_content, f, indent=4)
+    if "credentials.json" not in os.listdir("config") or not args.file:
+        if "credentials.json" in os.listdir():
+            with open("credential.json", "r") as f:
+                default_content = json.load(f)
+            with open("config/credentials.json", "w") as f:
+                json.dump(default_content, f, indent=4)
+        else:
+            default_content = {
+                "browser": {
+                    "profile": "",
+                    "binary": ""
+                },
+                "emails": [],
+                "telnumber": [],
+                "passwords": []
+            }
+            # Open the file for writing and dump the default content into it
+            with open("config/credentials.json", "w") as f:
+                json.dump(default_content, f, indent=4)
 
-        print("enter credentials, firefox profile and executable path in credentials.json")
-        sys.exit()
+            print("enter credentials, firefox profile and executable path in credentials.json")
+            sys.exit()
 
     passwords = []
     emails = []

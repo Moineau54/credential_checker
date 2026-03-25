@@ -6,7 +6,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from tqdm import tqdm
-from rich import print
+from rich.progress import track
 from rich.console import Console
 import time
 from selenium.common.exceptions import StaleElementReferenceException
@@ -44,6 +44,7 @@ class HaveIbeenPwned:
             element.send_keys(keys)
 
     def check_passwords(self):
+        console = Console()
         pwned_passwords = []
         current_time = time.strftime("%H:%M:%S")
         self.console.print(f"[blue][{current_time}][/blue]: [bold blue]checking passwords on HaveIbeenPwned[/bold blue]")
@@ -58,7 +59,7 @@ class HaveIbeenPwned:
                 "pwned-result-good",
                 "pwned-result-bad"
             ]
-            for password in tqdm(self.passwords):
+            for password in track(self.passwords, description="checking passwords on HaveIbeenPwned"):
                 self.captcha_solver()
                 self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
                 self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
@@ -71,13 +72,15 @@ class HaveIbeenPwned:
                             EC.visibility_of_element_located((By.ID, card))
                         )
                         if "Oh no — pwned!" in pwn_element.get_attribute("innerHTML"):
+                            # console.print(f"[red] password {password} has been pwned[/red]")
+                            print(f"\033[31mpassword {password} has been pwned\033[0m")
                             pwned_passwords.append(password)
                             break
                     except EC.NoSuchElementException:
                         continue
                     except Exception as e:
                         continue
-                time.sleep(2)
+                time.sleep(0.5)
 
         return pwned_passwords
 
@@ -105,7 +108,7 @@ class HaveIbeenPwned:
                 "pwned-result-bad",
                 "email-result-bad"
             ]
-            for email in tqdm(self.emails):
+            for email in track(self.emails, description="checking emails on HaveIbeenPwned"):
                 self.captcha_solver()
                 self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
                 self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
@@ -121,12 +124,13 @@ class HaveIbeenPwned:
                             EC.visibility_of_element_located((By.ID, card))
                         )
                         if "Oh no — pwned!" in pwn_element.get_attribute("innerHTML"):
+                            print(f"\033[31memail {email} has been pwned\033[0m")
                             pwned_email.append(email)
                             break
                     except EC.NoSuchElementException:
                         continue
                     except Exception as e:
                         continue
-                time.sleep(2)
+                time.sleep(0.5)
 
         return pwned_email
