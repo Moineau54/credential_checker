@@ -159,7 +159,7 @@ def main():
 
     if "credentials.json" not in os.listdir("config") or not args.file:
         if "credentials.json" in os.listdir():
-            with open("credential.json", "r") as f:
+            with open("credentials.json", "r") as f:
                 default_content = json.load(f)
             with open("config/credentials.json", "w") as f:
                 json.dump(default_content, f, indent=4)
@@ -184,9 +184,11 @@ def main():
     emails = []
     telephone_numbers = []
 
+    if not args.file:
+        args.file = "credentials.json"
     if not args.credential:
         args.credential_type = "email password tel"
-        with open("credentials.json") as f:
+        with open(args.file) as f:
             content = json.load(f)  # Use json.load to read data from the file
 
         if len(content["telnumbers"]) == 0 and len(content["emails"]) == 0 and len(content["passwords"]) == 0:
@@ -224,48 +226,48 @@ def main():
     pwned_passwords = []
     pwned_emails = []
     pwned_numbers = []
-
-    if args.hIbP or args.all:
-        haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails)
-        if args.credential_type.__contains__("password"):
+    if args.credential_type.__contains__("password"):
+        if args.hIbP or args.all:
+            haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails)
             haveIbeenPwned_passwords = haveIbeenPwned.check_passwords()
             if haveIbeenPwned_passwords != None and len(haveIbeenPwned_passwords) != 0:
                 for hIbP_password in haveIbeenPwned_passwords:
                     if hIbP_password not in pwned_passwords:
                         pwned_passwords.append(hIbP_password)
-
-        if args.credential_type.__contains__("email"):
-            haveIbeenPwned_emails = haveIbeenPwned.check_emails()
-            if haveIbeenPwned_emails != None and len(haveIbeenPwned_emails) != 0:
-                for hIbP_email in haveIbeenPwned_emails:
-                    if hIbP_email not in pwned_emails:
-                        pwned_emails.append(hIbP_email)
-
-        if args.credential_type.__contains__("tel"):
-            pass  # Implement if needed
-
-    if args.cybernews or args.all:
-        cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
-        if args.credential_type.__contains__("password"):
+        
+        if args.cybernews or args.all:
+            cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
             cybernews_passwords = cybernews.check_passwords()
             if cybernews_passwords != None and len(cybernews_passwords) != 0:
                 for Cybernews_password in cybernews_passwords:
                     if Cybernews_password not in pwned_passwords:
                         pwned_passwords.append(Cybernews_password)
-
-        if args.credential_type.__contains__("email"):
+        
+    if args.credential_type.__contains__("email"):
+        if args.hIbP or args.all:
+            haveIbeenPwned_emails = haveIbeenPwned.check_emails()
+            if haveIbeenPwned_emails != None and len(haveIbeenPwned_emails) != 0:
+                for hIbP_email in haveIbeenPwned_emails:
+                    if hIbP_email not in pwned_emails:
+                        pwned_emails.append(hIbP_email)
+        
+        if args.cybernews or args.all:
+            cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
             cybernews_emails = cybernews.check_emails()
             if cybernews_emails != None and len(cybernews_emails) != 0:
                 for cybernews_email in cybernews_emails:
                     if cybernews_email not in pwned_emails:
                         pwned_emails.append(cybernews_email)
-
-        if args.credential_type.__contains__("tel"):
+        
+    if args.credential_type.__contains__("tel"):
+        if args.cybernews or args.all:
+            cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
             cybernews_telephone_numbers = cybernews.check_phone()
             if cybernews_telephone_numbers != None and len(cybernews_telephone_numbers):
                 for cybernews_number in cybernews_telephone_numbers:
                     if cybernews_number not in pwned_numbers:
                         pwned_numbers.append(cybernews_number)
+            
 
     printing(console, pwned_passwords=pwned_passwords, pwned_numbers=pwned_numbers, pwned_emails=pwned_emails)
 
