@@ -128,8 +128,14 @@ class Cybernews:
                 ".personal-data-leak-checker-steps__status"
             ]
             for email in track(self.emails, description="checking emails on Cybernews emails leak checker"):
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+                try:
+                    element.send_keys(Keys.CONTROL + "a")  # Select all text
+                    element.send_keys(Keys.BACKSPACE)
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 element.send_keys(email)
                 element.send_keys(Keys.ENTER)
                 time.sleep(1)
@@ -179,8 +185,14 @@ class Cybernews:
                 ".personal-data-leak-checker-steps__status"
             ]
             for number in track(self.numbers, description="checking phone numbers on Cybernews phone number leak checker"):
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+                try:
+                    element.send_keys(Keys.CONTROL + "a")  # Select all text
+                    element.send_keys(Keys.BACKSPACE)
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 element.send_keys(number)
                 element.send_keys(Keys.ENTER)
                 time.sleep(1)
@@ -238,8 +250,14 @@ class Cybernews:
             ]
 
             for password in track(self.passwords, description="checking passwords on Cybernews Password leak checker"):
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+                try:
+                    element.send_keys(Keys.CONTROL + "a")  # Select all text
+                    element.send_keys(Keys.BACKSPACE)
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 element.send_keys(password)
                 element.send_keys(Keys.ENTER)
                 time.sleep(1)

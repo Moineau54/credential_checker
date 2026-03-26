@@ -61,8 +61,14 @@ class HaveIbeenPwned:
             ]
             for password in track(self.passwords, description="checking passwords on HaveIbeenPwned"):
                 self.captcha_solver()
-                self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
-                self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
+                try:
+                    self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
+                    self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 self.safe_send_keys(element, password)  # Enter password
                 self.safe_send_keys(element, Keys.ENTER)  # Submit
                 self.captcha_solver()
@@ -110,8 +116,14 @@ class HaveIbeenPwned:
             ]
             for email in track(self.emails, description="checking emails on HaveIbeenPwned"):
                 self.captcha_solver()
-                self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
-                self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
+                try:
+                    self.safe_send_keys(element, Keys.CONTROL + "a")  # Select all text
+                    self.safe_send_keys(element, Keys.BACKSPACE)  # Clear field
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 time.sleep(1)
                 self.captcha_solver()
                 self.safe_send_keys(element, email)  # Enter email
