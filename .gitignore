@@ -1,4 +1,6 @@
+__pycache__/
 .vscode/*
+credentials.json
 credentials.json
 .idea/*
 .idea

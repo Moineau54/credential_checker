@@ -7,7 +7,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from tqdm import tqdm
-from rich import print
+from rich.progress import track
 from rich.console import Console
 import time
 
@@ -127,9 +127,15 @@ class Cybernews:
             cybernews_cards = [
                 ".personal-data-leak-checker-steps__status"
             ]
-            for email in tqdm(self.emails):
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+            for email in track(self.emails, description="checking emails on Cybernews emails leak checker"):
+                try:
+                    element.send_keys(Keys.CONTROL + "a")  # Select all text
+                    element.send_keys(Keys.BACKSPACE)
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 element.send_keys(email)
                 element.send_keys(Keys.ENTER)
                 time.sleep(1)
@@ -139,6 +145,7 @@ class Cybernews:
                             EC.visibility_of_element_located(((By.CSS_SELECTOR, card)))
                         )
                         if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
+                            print(f"\033[31memail {email} has been pwned\033[0m")
                             pwned_emails.append(email)
                             break
 
@@ -177,9 +184,15 @@ class Cybernews:
             cybernews_cards = [
                 ".personal-data-leak-checker-steps__status"
             ]
-            for number in tqdm(self.numbers):
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+            for number in track(self.numbers, description="checking phone numbers on Cybernews phone number leak checker"):
+                try:
+                    element.send_keys(Keys.CONTROL + "a")  # Select all text
+                    element.send_keys(Keys.BACKSPACE)
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 element.send_keys(number)
                 element.send_keys(Keys.ENTER)
                 time.sleep(1)
@@ -189,6 +202,7 @@ class Cybernews:
                             EC.visibility_of_element_located(((By.CSS_SELECTOR, card)))
                         )
                         if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
+                            print(f"\033[31mphone number {number} has been pwned\033[0m")
                             pwned_phone.append(number)
                             break
 
@@ -208,7 +222,7 @@ class Cybernews:
         pwned_password = []
         current_time = time.strftime("%H:%M:%S")
         self.console.print(
-            f"[blue][{current_time}][/blue]: [bold blue]checking passwords on Cybernews Password leak checker[/bold blue]")
+            f"[blue][{current_time}][/blue]: [bold blue]checking passwords on Cybernews password leak checker[/bold blue]")
 
         self.driver.get(self.url_passwords)
 
@@ -235,9 +249,15 @@ class Cybernews:
                 ".personal-data-leak-checker-steps__status"
             ]
 
-            for password in tqdm(self.passwords):
-                element.send_keys(Keys.CONTROL + "a")  # Select all text
-                element.send_keys(Keys.BACKSPACE)
+            for password in track(self.passwords, description="checking passwords on Cybernews Password leak checker"):
+                try:
+                    element.send_keys(Keys.CONTROL + "a")  # Select all text
+                    element.send_keys(Keys.BACKSPACE)
+                except Exception as e:
+                    try:
+                        element.clear()
+                    except Exception as e:
+                        print(e)
                 element.send_keys(password)
                 element.send_keys(Keys.ENTER)
                 time.sleep(1)
@@ -249,6 +269,7 @@ class Cybernews:
                             EC.visibility_of_element_located((By.CSS_SELECTOR, card))
                         )
                         if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
+                            print(f"\033[31mpassword {password} has been pwned\033[0m")
                             pwned_password.append(password)
                             break  # Found leak, no need to check other cards
 
