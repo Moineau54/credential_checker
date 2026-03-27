@@ -86,7 +86,7 @@ class HaveIbeenPwned:
                         continue
                     except Exception as e:
                         continue
-                time.sleep(0.5)
+                time.sleep(0.1)
 
         return pwned_passwords
 
@@ -143,6 +143,6 @@ class HaveIbeenPwned:
                         continue
                     except Exception as e:
                         continue
-                time.sleep(0.5)
+                time.sleep(0.1)
 
         return pwned_email
