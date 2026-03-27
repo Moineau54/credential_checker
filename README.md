@@ -10,7 +10,6 @@ a simple credential checker that uses Selenium to check on websites like HaveIBe
 
 ## TODO
 - Implement:
-    - [leakcheck](https://leakcheck.io/)
     - [databreach.com](https://databreach.com/)
     - [avast](https://www.avast.com/en-us/hackcheck)
     - [ipqualityscore](https://www.ipqualityscore.com/data-breach-lookup/password-leak-check)

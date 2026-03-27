@@ -20,6 +20,7 @@ from selenium.common.exceptions import StaleElementReferenceException
 
 from src.haveIbeenPwned import HaveIbeenPwned
 from src.cybernews import Cybernews
+from src.databreach import Databreach
 
 
 def printing(console, pwned_passwords, pwned_numbers, pwned_emails):
@@ -88,20 +89,18 @@ def arguments():
         action='store_true',
         help='Check only "CyberNews" for the provided credentials.'
     )
+    
+    parser.add_argument(
+        '--databreach',
+        action='store_true',
+        help='Check only "Databreach" for the provided credentials.'
+    )
 
     # Option to check all sites (default is to check all)
     parser.add_argument(
         '--all',
         action='store_true',
         help='Check all pwned sites (default action).'
-    )
-
-    # Browser type (chrome or firefox)
-    parser.add_argument(
-        '--browser',
-        choices=['chrome', 'firefox'],
-        default='chrome',
-        help='Specify the browser to use: "chrome" or "firefox". Default is chrome.'
     )
 
     # Parse arguments
@@ -130,13 +129,8 @@ def initialize_browser(args):
     else:
         headless_option = ""
 
-    if args.browser == 'chrome':
-        driver = uc.Chrome(version_main=139, headless=headless_option)
-    elif args.browser == 'firefox':
-        firefox_options = Options()
-        if headless_option:
-            firefox_options.add_argument("--headless")
-        driver = Firefox(options=firefox_options)
+    driver = uc.Chrome(version_main=139, headless=headless_option)
+
     
     return driver
 
@@ -259,6 +253,14 @@ def main():
                     if cybernews_email not in pwned_emails:
                         pwned_emails.append(cybernews_email)
         
+        if args.databreach or args.all:
+            databreach = Databreach(driver=driver, emails=emails, numbers=telephone_numbers)
+            databreach_emails = databreach.check_emails()
+            if databreach_emails != None and len(databreach_emails) != 0:
+                for databreach_email in databreach_emails:
+                    if databreach_email not in pwned_emails:
+                        pwned_emails.append(databreach_email)
+        
     if args.credential_type.__contains__("tel"):
         if args.cybernews or args.all:
             cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
@@ -268,7 +270,14 @@ def main():
                     if cybernews_number not in pwned_numbers:
                         pwned_numbers.append(cybernews_number)
             
-
+        if args.databreach or args.all:
+            databreach = Databreach(driver=driver, emails=email, numbers=telephone_numbers)
+            databreach_numbers = databreach.check_phone()
+            if databreach_numbers != None and len(databreach_numbers) != 0:
+                for databreach_number in databreach_numbers:
+                    if databreach_number not in pwned_numbers:
+                        pwned_numbers.append(databreach_numbers)
+            
     printing(console, pwned_passwords=pwned_passwords, pwned_numbers=pwned_numbers, pwned_emails=pwned_emails)
 
     driver.close()
