@@ -179,18 +179,18 @@ def main():
     telephone_numbers = []
 
     if not args.file:
-        args.file = "credentials.json"
+        args.file = "config/credentials.json"
     if not args.credential:
         args.credential_type = "email password tel"
         with open(args.file) as f:
             content = json.load(f)  # Use json.load to read data from the file
 
-        if len(content["telnumbers"]) == 0 and len(content["emails"]) == 0 and len(content["passwords"]) == 0:
+        if len(content["telnumber"]) == 0 and len(content["emails"]) == 0 and len(content["passwords"]) == 0:
             console.print("[bold red]no credentials of any kind in crendentials.json.\nplease enter a crendential in credentials.json[/bold red]")
             sys.exit()
         else:
-            if len(content["telnumbers"]) > 0:
-                for number in content["telnumbers"]:
+            if len(content["telnumber"]) > 0:
+                for number in content["telnumber"]:
                     telephone_numbers.append(number)
             else:
                 console.print("[orange]no telephone numbers in credentials.json[/orange]")
