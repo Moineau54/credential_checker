@@ -55,14 +55,29 @@ class Databreach:
                         print(e)
                 element.send_keys(email)
                 element.send_keys(Keys.ENTER)
-                time.sleep(0.1)
+                time.sleep(2)
                 for card in cybernews_cards:
                     try:
-                        cybernews_element = WebDriverWait(self.driver, 2).until(
+                        cybernews_element = WebDriverWait(self.driver, 5).until(
                             EC.visibility_of_element_located(((By.CSS_SELECTOR, card)))
                         )
                         if "Your data was leaked" in cybernews_element.get_attribute("innerHTML"):
-                            print(f"\033[31memail {email} has been pwned\033[0m")
+                            leaks = [
+                                ".text-xl.font-bold"
+                            ]
+                            all_leaks = ""
+                            for leak in leaks:
+                                leaks_ = self.driver.find_elements(By.CSS_SELECTOR, leak)
+                                for leak_ in leaks_:
+                                    if leak_:
+                                        if all_leaks == "":
+                                            all_leaks = leak_.text
+                                        else:
+                                            all_leaks = f"{all_leaks}, {leak_.text}"
+                            if all_leaks == "":
+                                print(f"\033[31memail {email} has been pwned\033[0m")
+                            else:
+                                print(f"\033[31memail {email} has been pwned\n\tleaks: {all_leaks}\033[0m")
                             pwned_emails.append(email)
                             break
 
@@ -99,7 +114,9 @@ class Databreach:
 
         finally:
             cybernews_cards = [
-                ".w-full.bg-card-accent.md:rounded-b-3xl"
+                #".w-full.bg-card-accent.md:rounded-b-3xl"
+                ".flex.flex-col.gap-5.overflow-hidden",
+                ".grid.w-full.transition-opacity",
             ]
             for number in track(self.numbers, description="checking phone numbers on Databreach phone number leak checker"):
                 try:
@@ -112,14 +129,29 @@ class Databreach:
                         print(e)
                 element.send_keys(number)
                 element.send_keys(Keys.ENTER)
-                time.sleep(0.1)
+                time.sleep(2)
                 for card in cybernews_cards:
                     try:
                         cybernews_element = WebDriverWait(self.driver, 2).until(
                             EC.visibility_of_element_located(((By.CSS_SELECTOR, card)))
                         )
-                        if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
-                            print(f"\033[31mphone number {number} has been pwned\033[0m")
+                        if "Your data was leaked" in cybernews_element.get_attribute("innerHTML"):
+                            leaks = [
+                                ".text-xl.font-bold"
+                            ]
+                            all_leaks = ""
+                            for leak in leaks:
+                                leaks_ = self.driver.find_elements(By.CSS_SELECTOR, leak)
+                                for leak_ in leaks_:
+                                    if leak_:
+                                        if all_leaks == "":
+                                            all_leaks = leak_.text
+                                        else:
+                                            all_leaks = f"{all_leaks}, {leak_.text}"
+                            if all_leaks == "":
+                                print(f"\033[31mphone number {number} has been pwned\033[0m")
+                            else:
+                                print(f"\033[31mphone number {number} has been pwned\n\tleaks: {all_leaks}\033[0m")
                             pwned_phone.append(number)
                             break
 
