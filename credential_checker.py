@@ -154,7 +154,7 @@ def main():
 
     if "credentials.json" not in os.listdir("config") or not args.file:
         if "credentials.json" in os.listdir():
-            with open("credentials.json", "r") as f:
+            with open("config/credentials.json", "r") as f:
                 default_content = json.load(f)
             with open("config/credentials.json", "w") as f:
                 json.dump(default_content, f, indent=4)
