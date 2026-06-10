@@ -2,6 +2,7 @@ __pycache__/
 .vscode/*
 credentials.json
 credentials.json
+config/
 .idea/*
 .idea
 src/__pycache__/*

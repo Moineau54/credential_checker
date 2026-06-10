@@ -36,8 +36,8 @@ def printing(console, pwned_passwords, pwned_numbers, pwned_emails):
 
     if len(pwned_numbers) > 0:
         console.print("\n[bold red]pwned phone numbers:[/bold red]")
-        for pwn_numbers in pwned_numbers:
-            console.print(f"    [yellow]{pwn_numbers}[/yellow]")
+        for pwn_number in pwned_numbers:
+            console.print(f"    [yellow]{pwn_number}[/yellow]")
 
 def arguments():
     parser = argparse.ArgumentParser(
@@ -107,14 +107,15 @@ def arguments():
     args = parser.parse_args()
 
     # If both --hIbP and --cybernews are not specified, default to checking all
-    if not (args.hIbP or args.cybernews):
+    if not (args.hIbP or args.cybernews or args.databreach):
         args.all = True  # Default to checking all sites
         args.hIbP = True
         args.cybernews = True
+        args.databreach = True
 
-    if args.credential_type and not args.credential:
-        parser.error("--credential must be specified when using --credential_type.")
-        sys.exit()
+    # if args.credential_type and not args.credential:
+    #     parser.error("--credential must be specified when using --credential_type.")
+    #     sys.exit()
 
     # Ensure that --credential and --credential_type are used together
     if args.credential and not args.credential_type:
@@ -165,7 +166,8 @@ def main():
                 },
                 "emails": [],
                 "telnumber": [],
-                "passwords": []
+                "passwords": [],
+                "HIBP_API": ""
             }
             # Open the file for writing and dump the default content into it
             with open("config/credentials.json", "w") as f:
@@ -181,32 +183,40 @@ def main():
     if not args.file:
         args.file = "credentials.json"
     if not args.credential:
-        args.credential_type = "email password tel"
+        if not args.credential_type:
+            args.credential_type = "email password tel"
         with open(args.file) as f:
             content = json.load(f)  # Use json.load to read data from the file
 
-        if len(content["telnumbers"]) == 0 and len(content["emails"]) == 0 and len(content["passwords"]) == 0:
+        if len(content["telnumber"]) == 0 and len(content["emails"]) == 0 and len(content["passwords"]) == 0:
             console.print("[bold red]no credentials of any kind in crendentials.json.\nplease enter a crendential in credentials.json[/bold red]")
             sys.exit()
         else:
-            if len(content["telnumbers"]) > 0:
-                for number in content["telnumbers"]:
-                    telephone_numbers.append(number)
-            else:
-                console.print("[orange]no telephone numbers in credentials.json[/orange]")
+            if args.credential_type.__contains__("tel"):
+                if len(content["telnumber"]) > 0:
+                    for number in content["telnumber"]:
+                        telephone_numbers.append(number)
+                else:
+                    console.print("[orange]no telephone numbers in credentials.json[/orange]")
 
-            if len(content["emails"]) > 0:
-                for email in content["emails"]:
-                    emails.append(email)
-            else:
-                console.print("[orange]no emails in credentials.json[/orange]")
+            if args.credential_type.__contains__("email"):
+                if len(content["emails"]) > 0:
+                    for email in content["emails"]:
+                        emails.append(email)
+                else:
+                    console.print("[orange]no emails in credentials.json[/orange]")
 
-            if len(content["passwords"]) > 0:
-                for password in content["passwords"]:
-                    passwords.append(password)
-            else:
-                console.print("[orange]no passwords in credentials.json[/orange]")
+            if args.credential_type.__contains__("password"):
+                if len(content["passwords"]) > 0:
+                    for password in content["passwords"]:
+                        passwords.append(password)
+                else:
+                    console.print("[orange]no passwords in credentials.json[/orange]")
 
+            try:
+                hibpapi = content["HIBP_API"]
+            except:
+                hibpapi = ""
     elif args.credential_type.__contains__("email"):
         emails.append(args.credential)
     elif args.credential_type.__contains__("password"):
@@ -220,9 +230,12 @@ def main():
     pwned_passwords = []
     pwned_emails = []
     pwned_numbers = []
+    databreach = None
+    haveIbeenPwned = None
+    cybernews = None
     if args.credential_type.__contains__("password"):
         if args.hIbP or args.all:
-            haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails)
+            haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails, api_key=hibpapi)
             haveIbeenPwned_passwords = haveIbeenPwned.check_passwords()
             if haveIbeenPwned_passwords != None and len(haveIbeenPwned_passwords) != 0:
                 for hIbP_password in haveIbeenPwned_passwords:
@@ -239,6 +252,8 @@ def main():
         
     if args.credential_type.__contains__("email"):
         if args.hIbP or args.all:
+            if not haveIbeenPwned:
+                haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails, api_key=hibpapi)
             haveIbeenPwned_emails = haveIbeenPwned.check_emails()
             if haveIbeenPwned_emails != None and len(haveIbeenPwned_emails) != 0:
                 for hIbP_email in haveIbeenPwned_emails:
@@ -246,7 +261,8 @@ def main():
                         pwned_emails.append(hIbP_email)
         
         if args.cybernews or args.all:
-            cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
+            if not cybernews:
+                cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
             cybernews_emails = cybernews.check_emails()
             if cybernews_emails != None and len(cybernews_emails) != 0:
                 for cybernews_email in cybernews_emails:
@@ -254,7 +270,8 @@ def main():
                         pwned_emails.append(cybernews_email)
         
         if args.databreach or args.all:
-            databreach = Databreach(driver=driver, emails=emails, numbers=telephone_numbers)
+            if not databreach:
+                databreach = Databreach(driver=driver, emails=emails, numbers=telephone_numbers)
             databreach_emails = databreach.check_emails()
             if databreach_emails != None and len(databreach_emails) != 0:
                 for databreach_email in databreach_emails:
@@ -263,7 +280,8 @@ def main():
         
     if args.credential_type.__contains__("tel"):
         if args.cybernews or args.all:
-            cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
+            if not cybernews:
+                cybernews = Cybernews(driver=driver, passwords=passwords, numbers=telephone_numbers, emails=emails)
             cybernews_telephone_numbers = cybernews.check_phone()
             if cybernews_telephone_numbers != None and len(cybernews_telephone_numbers):
                 for cybernews_number in cybernews_telephone_numbers:
@@ -271,12 +289,12 @@ def main():
                         pwned_numbers.append(cybernews_number)
             
         if args.databreach or args.all:
-            databreach = Databreach(driver=driver, emails=email, numbers=telephone_numbers)
+            databreach = Databreach(driver=driver, emails=emails, numbers=telephone_numbers)
             databreach_numbers = databreach.check_phone()
             if databreach_numbers != None and len(databreach_numbers) != 0:
                 for databreach_number in databreach_numbers:
                     if databreach_number not in pwned_numbers:
-                        pwned_numbers.append(databreach_numbers)
+                        pwned_numbers.append(databreach_number)
             
     printing(console, pwned_passwords=pwned_passwords, pwned_numbers=pwned_numbers, pwned_emails=pwned_emails)
 

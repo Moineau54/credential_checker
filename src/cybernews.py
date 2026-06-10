@@ -10,100 +10,207 @@ from tqdm import tqdm
 from rich.progress import track
 from rich.console import Console
 from bs4 import BeautifulSoup
+import requests
 import time
+import random
 
 
 class Cybernews:
-    def __init__(self, driver, passwords, emails, numbers):
+    def __init__(self, driver, passwords, emails, numbers, flaresolverr_url: str = "http://localhost:8191/v1"):
         self.driver = driver
         self.url_email_and_phone = "https://cybernews.com/personal-data-leak-check/"
         self.url_passwords = "https://cybernews.com/password-leak-check/"
         self.passwords = passwords
         self.emails = emails
         self.numbers = numbers
+        self.flaresolverr_url = flaresolverr_url
         self.console = Console()
 
+    # ------------------------------------------------------------------ #
+    #  FlareSolverr                                                        #
+    # ------------------------------------------------------------------ #
+
+    def _get_flaresolverr_cookies(self, url: str):
+        """Use FlareSolverr to bypass Cloudflare and return cookies + UA."""
+        self.console.print(f"[yellow]Requesting FlareSolverr bypass for {url}...[/yellow]")
+        try:
+            response = requests.post(self.flaresolverr_url, json={
+                "cmd": "request.get",
+                "url": url,
+                "maxTimeout": 60000
+            }, timeout=70)
+            data = response.json()
+
+            if data.get("status") != "ok":
+                self.console.print(f"[red]FlareSolverr failed: {data.get('message')}[/red]")
+                return None, None
+
+            cookies = data["solution"]["cookies"]
+            user_agent = data["solution"]["userAgent"]
+            self.console.print("[green]FlareSolverr bypass successful[/green]")
+            return cookies, user_agent
+
+        except Exception as e:
+            self.console.print(f"[red]FlareSolverr error: {e}[/red]")
+            return None, None
+
+    def _apply_flaresolverr_cookies(self, url: str) -> bool:
+        """Navigate to URL and inject FlareSolverr cookies into Selenium session."""
+        cookies, user_agent = self._get_flaresolverr_cookies(url)
+        if not cookies:
+            return False
+
+        # Override User-Agent via CDP (works with undetected-chromedriver)
+        try:
+            self.driver.execute_cdp_cmd(
+                "Network.setUserAgentOverride",
+                {"userAgent": user_agent}
+            )
+        except Exception:
+            pass  # Geckodriver doesn't support CDP — skip silently
+
+        # Navigate first so the domain is active for cookie injection
+        self.driver.get(url)
+        time.sleep(1)
+
+        # Inject cookies
+        for cookie in cookies:
+            try:
+                selenium_cookie = {
+                    "name": cookie["name"],
+                    "value": cookie["value"],
+                    "domain": cookie.get("domain", ""),
+                    "path": cookie.get("path", "/"),
+                    "secure": cookie.get("secure", False),
+                }
+                if cookie.get("expires") and cookie["expires"] != -1:
+                    selenium_cookie["expiry"] = int(cookie["expires"])
+                self.driver.add_cookie(selenium_cookie)
+            except Exception as e:
+                self.console.print(f"[orange]Cookie inject warning: {e}[/orange]")
+
+        # Refresh to activate cookies
+        self.driver.refresh()
+        time.sleep(2)
+
+        page = self.driver.page_source.lower()
+        title = self.driver.title.lower()
+        if "blocked" in page or "just a moment" in title or "sorry" in title:
+            self.console.print("[red]Still blocked after FlareSolverr — falling back to direct navigation[/red]")
+            return False
+
+        self.console.print("[green]Cloudflare bypass applied successfully[/green]")
+        return True
+
+    def _navigate(self, url: str):
+        """Navigate to URL, using FlareSolverr if Cloudflare blocks us."""
+        self.driver.get(url)
+        time.sleep(1)
+
+        page = self.driver.page_source.lower()
+        title = self.driver.title.lower()
+        if "blocked" in page or "sorry, you have been blocked" in page or "just a moment" in title:
+            self.console.print("[yellow]Cloudflare block detected — trying FlareSolverr...[/yellow]")
+            success = self._apply_flaresolverr_cookies(url)
+            if not success:
+                self.console.print("[red]Could not bypass Cloudflare[/red]")
+                return False
+        return True
+
+    # ------------------------------------------------------------------ #
+    #  Helpers                                                             #
+    # ------------------------------------------------------------------ #
+
     def dismiss_popups_and_banners(self):
-        """
-        Function to dismiss cookie banners and notification popups
-        """
+        """Dismiss cookie banners and notification popups."""
         current_time = time.strftime("%H:%M:%S")
         self.console.print(f"[blue][{current_time}][/blue]: [bold orange]Dismissing popups and banners[/bold orange]")
 
-        # Wait a moment for page to load
         time.sleep(0.1)
 
-        # List of selectors for different types of popups/banners
         popup_selectors = [
-            # Cookie consent banners
-            "button[data-cky-tag='reject-button']",  # Reject all cookies
-            "button[data-cky-tag='accept-button']",  # Accept all cookies
-            ".cky-btn-reject",  # Alternative reject button
-            ".cky-btn-accept",  # Alternative accept button
-
-            # OneSignal notification popups
-            "#onesignal-slidedown-cancel-button",  # Cancel notifications
+            "button[data-cky-tag='reject-button']",
+            "button[data-cky-tag='accept-button']",
+            ".cky-btn-reject",
+            ".cky-btn-accept",
+            "#onesignal-slidedown-cancel-button",
             ".onesignal-slidedown-cancel-button",
-
-            # Generic close buttons
-            "button[data-js-cookie-off-button]",  # Cookie off button
-            ".subscribe__close",  # Newsletter popup close
-            "[data-js-subscribe-close]",  # Subscribe close button
-
-            # Additional cookie banner close buttons
+            "button[data-js-cookie-off-button]",
+            ".subscribe__close",
+            "[data-js-subscribe-close]",
             ".cky-btn-close",
             "[data-cky-tag='detail-close']",
-
-            # Browser notification permission
-            # Note: Browser permission popups can't be dismissed via Selenium
         ]
 
         dismissed_count = 0
-
         for selector in popup_selectors:
             try:
-                # Try to find and click the element with a short timeout
                 element = WebDriverWait(self.driver, 0.1).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                 )
-
-                # Scroll element into view if needed
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
                 time.sleep(0.1)
-
-                # Try to click the element
                 element.click()
                 dismissed_count += 1
                 self.console.print(f"[green]✓ Dismissed popup with selector: {selector}[/green]")
-                time.sleep(0.1)  # Wait a moment between clicks
-
+                time.sleep(0.1)
             except (TimeoutException, NoSuchElementException):
-                # Element not found or not clickable, continue to next
                 continue
             except Exception as e:
-                # Log other exceptions but continue
                 self.console.print(f"[orange]Warning: Could not dismiss popup {selector}: {str(e)}[/orange]")
                 continue
-
-        # Try to handle browser notification permission popup programmatically
-        try:
-            # Execute JavaScript to deny notifications if the permission API is available
-            self.driver.execute_script("""
-                if ('Notification' in window && Notification.permission === 'default') {
-                    // This won't work for permission prompts, but we can try
-                    console.log('Notification permission is default');
-                }
-            """)
-        except Exception:
-            pass
 
         if dismissed_count > 0:
             self.console.print(f"[green]Successfully dismissed {dismissed_count} popup(s)[/green]")
         else:
-            self.console.print(f"[blue]No popups found to dismiss[/blue]")
+            self.console.print("[blue]No popups found to dismiss[/blue]")
 
-        # Wait a moment for any animations to complete
         time.sleep(0.1)
+
+    def _random_delay(self, short=False):
+        """Random delay. Occasionally takes a longer pause."""
+        if short:
+            time.sleep(random.uniform(0.05, 0.18))
+            return
+        delay = random.uniform(0.2, 2)
+        if random.random() < 0.1:
+            delay = random.uniform(0, 2)
+            # self.console.print(f"[dim]taking a longer pause ({delay:.1f}s)...[/dim]")
+        time.sleep(delay)
+
+    def _type_humanlike(self, element, text):
+        """Type text character by character with random delays.
+        Shorter texts get slower, more human-like delays.
+        Longer texts get faster delays to avoid excessive total time.
+        """
+        length = len(text)
+        if length <= 8:
+            min_delay, max_delay = 0.008, 0.25
+        elif length <= 16:
+            min_delay, max_delay = 0.004, 0.15
+        elif length <= 32:
+            min_delay, max_delay = 0.002, 0.08
+        else:
+            min_delay, max_delay = 0.001, 0.04
+
+        for char in text:
+            element.send_keys(char)
+            time.sleep(random.uniform(min_delay, max_delay))
+
+    def _clear_element(self, element):
+        """Clear input field reliably."""
+        try:
+            element.send_keys(Keys.CONTROL + "a")
+            element.send_keys(Keys.BACKSPACE)
+        except Exception:
+            try:
+                element.clear()
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------ #
+    #  Checkers                                                            #
+    # ------------------------------------------------------------------ #
 
     def check_emails(self):
         pwned_emails = []
@@ -111,55 +218,49 @@ class Cybernews:
         self.console.print(
             f"[blue][{current_time}][/blue]: [bold blue]checking emails on Cybernews Personal data checker[/bold blue]")
 
-        self.driver.get(self.url_email_and_phone)
-
-        # Dismiss popups and banners first
+        if not self._navigate(self.url_email_and_phone):
+            return pwned_emails
         self.dismiss_popups_and_banners()
 
-        try:
-            element = WebDriverWait(self.driver, 2).until(
-                EC.visibility_of_element_located((By.ID, "email-or-phone"))
-            )
+        cybernews_cards = [".personal-data-leak-checker-steps__status"]
 
-            # Scroll element into view
-            self.driver.execute_script("arguments[0].scrollIntoView();", element)
+        for email in track(self.emails, description="checking emails on Cybernews emails leak checker"):
+            try:
+                element = WebDriverWait(self.driver, 2).until(
+                    EC.visibility_of_element_located((By.ID, "email-or-phone"))
+                )
+                self.driver.execute_script("arguments[0].scrollIntoView();", element)
+            except TimeoutException:
+                self.console.print("[red]Could not find input element, skipping...[/red]")
+                continue
 
-        finally:
-            cybernews_cards = [
-                ".personal-data-leak-checker-steps__status"
-            ]
-            for email in track(self.emails, description="checking emails on Cybernews emails leak checker"):
+            self._clear_element(element)
+            self._type_humanlike(element, email)
+            element.send_keys(Keys.ENTER)
+
+            try:
+                WebDriverWait(self.driver, 2).until(
+                    EC.visibility_of_element_located((By.CSS_SELECTOR, cybernews_cards[0]))
+                )
+            except TimeoutException:
+                time.sleep(random.uniform(0.1, 2))
+
+            for card in cybernews_cards:
                 try:
-                    element.send_keys(Keys.CONTROL + "a")  # Select all text
-                    element.send_keys(Keys.BACKSPACE)
-                except Exception as e:
-                    try:
-                        element.clear()
-                    except Exception as e:
-                        print(e)
-                element.send_keys(email)
-                element.send_keys(Keys.ENTER)
-                time.sleep(0.1)
-                for card in cybernews_cards:
-                    try:
-                        cybernews_element = WebDriverWait(self.driver, 2).until(
-                            EC.visibility_of_element_located(((By.CSS_SELECTOR, card)))
-                        )
-                        if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
-                            print(f"\033[31memail {email} has been pwned\033[0m")
-                            pwned_emails.append(email)
-                            break
+                    cybernews_element = WebDriverWait(self.driver, 2).until(
+                        EC.visibility_of_element_located((By.CSS_SELECTOR, card))
+                    )
+                    if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
+                        print(f"\033[31memail {email} has been pwned\033[0m")
+                        pwned_emails.append(email)
+                        break
+                except (NoSuchElementException, TimeoutException):
+                    continue
+                except Exception:
+                    continue
 
-                    except NoSuchElementException:
-                        # Element not found in the DOM, continue to the next card
-                        continue
+            self._random_delay()
 
-                    except Exception as e:
-                        # Handle any other unexpected exceptions
-                        # print(f"An error occurred with card {card}: {str(e)}")
-                        continue
-
-                time.sleep(0.1)
         return pwned_emails
 
     def check_phone(self):
@@ -168,55 +269,49 @@ class Cybernews:
         self.console.print(
             f"[blue][{current_time}][/blue]: [bold blue]checking phone numbers on Cybernews Personal data checker[/bold blue]")
 
-        self.driver.get(self.url_email_and_phone)
-
-        # Dismiss popups and banners first
+        if not self._navigate(self.url_email_and_phone):
+            return pwned_phone
         self.dismiss_popups_and_banners()
 
-        try:
-            element = WebDriverWait(self.driver, 2).until(
-                EC.visibility_of_element_located((By.ID, "email-or-phone"))
-            )
+        cybernews_cards = [".personal-data-leak-checker-steps__status"]
 
-            # Scroll element into view
-            self.driver.execute_script("arguments[0].scrollIntoView();", element)
+        for number in track(self.numbers, description="checking phone numbers on Cybernews phone number leak checker"):
+            try:
+                element = WebDriverWait(self.driver, 5).until(
+                    EC.visibility_of_element_located((By.ID, "email-or-phone"))
+                )
+                self.driver.execute_script("arguments[0].scrollIntoView();", element)
+            except TimeoutException:
+                self.console.print("[red]Could not find input element, skipping...[/red]")
+                continue
 
-        finally:
-            cybernews_cards = [
-                ".personal-data-leak-checker-steps__status"
-            ]
-            for number in track(self.numbers, description="checking phone numbers on Cybernews phone number leak checker"):
+            self._clear_element(element)
+            self._type_humanlike(element, number)
+            element.send_keys(Keys.ENTER)
+
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.visibility_of_element_located((By.CSS_SELECTOR, cybernews_cards[0]))
+                )
+            except TimeoutException:
+                time.sleep(random.uniform(3, 6))
+
+            for card in cybernews_cards:
                 try:
-                    element.send_keys(Keys.CONTROL + "a")  # Select all text
-                    element.send_keys(Keys.BACKSPACE)
-                except Exception as e:
-                    try:
-                        element.clear()
-                    except Exception as e:
-                        print(e)
-                element.send_keys(number)
-                element.send_keys(Keys.ENTER)
-                time.sleep(0.1)
-                for card in cybernews_cards:
-                    try:
-                        cybernews_element = WebDriverWait(self.driver, 2).until(
-                            EC.visibility_of_element_located(((By.CSS_SELECTOR, card)))
-                        )
-                        if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
-                            print(f"\033[31mphone number {number} has been pwned\033[0m")
-                            pwned_phone.append(number)
-                            break
+                    cybernews_element = WebDriverWait(self.driver, 2).until(
+                        EC.visibility_of_element_located((By.CSS_SELECTOR, card))
+                    )
+                    if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
+                        print(f"\033[31mphone number {number} has been pwned\033[0m")
+                        pwned_phone.append(number)
+                        break
+                except (NoSuchElementException, TimeoutException):
+                    continue
+                except Exception:
+                    continue
 
-                    except NoSuchElementException:
-                        # Element not found in the DOM, continue to the next card
-                        continue
+            self._random_delay()
 
-                    except Exception as e:
-                        # Handle any other unexpected exceptions
-                        # print(f"An error occurred with card {card}: {str(e)}")
-                        continue
-                
-                time.sleep(0.1)
         return pwned_phone
 
     def check_passwords(self):
@@ -225,116 +320,84 @@ class Cybernews:
         self.console.print(
             f"[blue][{current_time}][/blue]: [bold blue]checking passwords on Cybernews password leak checker[/bold blue]")
 
-        self.driver.get(self.url_passwords)
-
-        # Dismiss popups and banners first
+        if not self._navigate(self.url_passwords):
+            return pwned_password
         self.dismiss_popups_and_banners()
 
-        # Handle potential Cloudflare captcha
         if "Just a moment..." in self.driver.title:
             self.console.print("[orange]resolve captcha[/orange]")
             while "Just a moment..." in self.driver.title:
                 time.sleep(0.1)
 
-        try:
-            element = WebDriverWait(self.driver, 2).until(
-                EC.visibility_of_element_located((By.ID, "checked-password"))
-            )
-            # Scroll element into view
-            self.driver.execute_script("arguments[0].scrollIntoView();", element)
+        cybernews_cards = ["personal-data-leak-checker-steps__header"]
 
-        finally:
-            # Option 1: Using CSS_SELECTOR (current approach - most reliable)
-            cybernews_cards = [
-                # ".personal-data-leak-checker-steps__header__title_leaked",
-                # ".personal-data-leak-checker-steps__status",
-                # ".personal-data-leak-checker-steps__header"
-                "personal-data-leak-checker-steps__header"
-            ]
+        for password in track(self.passwords, description="checking passwords on Cybernews Password leak checker"):
+            try:
+                element = WebDriverWait(self.driver, 4).until(
+                    EC.visibility_of_element_located((By.ID, "checked-password"))
+                )
+                self.driver.execute_script("arguments[0].scrollIntoView();", element)
+            except TimeoutException:
+                self.console.print("[red]Could not find input element, skipping...[/red]")
+                continue
 
-            for password in track(self.passwords, description="checking passwords on Cybernews Password leak checker"):
-                try:
-                    element.send_keys(Keys.CONTROL + "a")  # Select all text
-                    element.send_keys(Keys.BACKSPACE)
-                except Exception as e:
-                    try:
-                        element.clear()
-                    except Exception as e:
-                        print(e)
-                element.send_keys(password)
-                element.send_keys(Keys.ENTER)
-                time.sleep(0.1)
+            self._clear_element(element)
+            self._type_humanlike(element, password)
+            element.send_keys(Keys.ENTER)
 
-                soup = BeautifulSoup(self.driver.page_source, "lxml")
-
-                # Option 1: Check specific elements (recommended)
-                for card in cybernews_cards:
-                    try:
-                        # cybernews_element = WebDriverWait(self.driver, 5).until(
-                        #     EC.visibility_of_element_located((By.CLASS_NAME, card))
-                        # )
-                        cybernews_element = soup.find("div", class_=card)
-                        text = cybernews_element.text.strip()
-                        # if "Your data has been leaked" in cybernews_element.get_attribute("innerHTML"):
-                        if text.__contains__('Oh no! Your password has been leaked'):
-                            print(f"\033[31mpassword {password} has been pwned\033[0m")
-                            if password not in pwned_password:
-                                pwned_password.append(password)
-                            break  # Found leak, no need to check other cards
-
-                    except (NoSuchElementException, TimeoutException):
-                        # Element not found, continue to the next card
-                        continue
-                    except Exception as e:
-                        # Handle any other unexpected exceptions
-                        continue
-
-                # Option 2: Alternative using CLASS_NAME (if you prefer)
-                # Note: Only works with single class names
-                try:
-                    # Remove dot and use only the main class name
-                    leak_element = WebDriverWait(self.driver, 1).until(
-                        EC.visibility_of_element_located(
-                            (By.CLASS_NAME, "personal-data-leak-checker-steps__header__title_leaked"))
+            try:
+                WebDriverWait(self.driver, 4).until(
+                    EC.visibility_of_element_located(
+                        (By.CLASS_NAME, "personal-data-leak-checker-steps__status")
                     )
-                    if leak_element:
+                )
+            except TimeoutException:
+                time.sleep(random.uniform(0.1, 2))
+
+            soup = BeautifulSoup(self.driver.page_source, "lxml")
+
+            for card in cybernews_cards:
+                try:
+                    cybernews_element = soup.find("div", class_=card)
+                    text = cybernews_element.text.strip()
+                    if 'Oh no! Your password has been leaked' in text:
+                        print(f"\033[31mpassword {password} has been pwned\033[0m")
                         if password not in pwned_password:
                             pwned_password.append(password)
-                except (NoSuchElementException, TimeoutException):
-                    pass
+                        break
+                except Exception:
+                    continue
 
-                # Option 3: Check entire page source (less precise but works)
-                if "Your data has been leaked" in self.driver.page_source and password not in pwned_password:
-                    print(f"\033[31mpassword {password} has been pwned\033[0m")
+            try:
+                leak_element = WebDriverWait(self.driver, 1).until(
+                    EC.visibility_of_element_located(
+                        (By.CLASS_NAME, "personal-data-leak-checker-steps__header__title_leaked"))
+                )
+                if leak_element and password not in pwned_password:
                     pwned_password.append(password)
-                
-                time.sleep(0.1)
+            except (NoSuchElementException, TimeoutException):
+                pass
+
+            if "Your data has been leaked" in self.driver.page_source and password not in pwned_password:
+                print(f"\033[31mpassword {password} has been pwned\033[0m")
+                pwned_password.append(password)
+
+            self._random_delay()
+
         return pwned_password
 
 
 # Example usage:
 if __name__ == "__main__":
-    # Example data
     emails = ["test@example.com"]
     passwords = ["password123"]
     numbers = ["+1234567890"]
 
-    # Initialize driver (you'll need to set this up)
     # driver = Firefox()
-
-    # Initialize checker
     # checker = Cybernews(driver, passwords, emails, numbers)
-
-    # Check emails (popups will be automatically dismissed)
+    # checker = Cybernews(driver, passwords, emails, numbers, flaresolverr_url="http://localhost:8191/v1")
     # pwned_emails = checker.check_emails()
-    # print(f"Pwned emails: {pwned_emails}")
-
-    # Check passwords (popups will be automatically dismissed)
     # pwned_passwords = checker.check_passwords()
-    # print(f"Pwned passwords: {pwned_passwords}")
-
-    # Check phone numbers (popups will be automatically dismissed)
     # pwned_phones = checker.check_phone()
-    # print(f"Pwned phones: {pwned_phones}")
 
     pass
