@@ -213,10 +213,7 @@ def main():
                 else:
                     console.print("[orange]no passwords in credentials.json[/orange]")
 
-            try:
-                hibpapi = content["HIBP_API"]
-            except:
-                hibpapi = ""
+            
     elif args.credential_type.__contains__("email"):
         emails.append(args.credential)
     elif args.credential_type.__contains__("password"):
@@ -233,6 +230,11 @@ def main():
     databreach = None
     haveIbeenPwned = None
     cybernews = None
+    if (args.hIbP or args.all):
+        try:
+            hibpapi = content["HIBP_API"]
+        except:
+            hibpapi = ""
     if args.credential_type.__contains__("password"):
         if args.hIbP or args.all:
             haveIbeenPwned = HaveIbeenPwned(driver=driver, passwords=passwords, emails=emails, api_key=hibpapi)

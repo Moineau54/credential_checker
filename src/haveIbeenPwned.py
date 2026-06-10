@@ -306,7 +306,7 @@ class HaveIbeenPwned:
             result = self._api_check_email(email)
 
             if result is None:
-                print(_dim(f"Using web fallback for {email}"))
+                # print(_dim(f"Using web fallback for {email}"))
                 if web_element is None:
                     web_element = self._get_form_element(self.url_email)
                     self.driver.execute_script("arguments[0].scrollIntoView();", web_element)
@@ -314,7 +314,24 @@ class HaveIbeenPwned:
                         EC.element_to_be_clickable((By.CSS_SELECTOR, ".form-control"))
                     )
                 if self._web_check_email(web_element, email):
-                    print(_red(f"email {email} has been pwned (web)"))
+                    leak_cards = [
+                        ".mb-0.me-auto.fw-semibold.text-white"
+                    ]
+                    leaks = ""
+                    for leak_card in leak_cards:
+                        elements = self.driver.find_elements(By.CSS_SELECTOR, leak_card)
+                        if elements:
+                            
+                            for element in elements:
+                                if leaks == "":
+                                    leaks = element.text
+                                else:
+                                    leaks = f"{leaks}, {element.text}"
+                    
+                    if leaks == "":
+                        print(_red(f"email {email} has been pwned (web)"))
+                    else:
+                        print(_red(f"email {email} has been pwned (web)\n\tleaks:  {leaks}"))
                     pwned_emails.append(email)
 
             elif len(result) > 0:
