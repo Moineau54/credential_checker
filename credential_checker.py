@@ -181,7 +181,7 @@ def main():
     telephone_numbers = []
 
     if not args.file:
-        args.file = "credentials.json"
+        args.file = "config/credentials.json"
     if not args.credential:
         if not args.credential_type:
             args.credential_type = "email password tel"
@@ -192,6 +192,7 @@ def main():
             console.print("[bold red]no credentials of any kind in crendentials.json.\nplease enter a crendential in credentials.json[/bold red]")
             sys.exit()
         else:
+
             if args.credential_type.__contains__("tel"):
                 if len(content["telnumber"]) > 0:
                     for number in content["telnumber"]:
